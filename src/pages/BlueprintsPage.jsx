@@ -34,6 +34,7 @@ export default function BlueprintsPage() {
   }
 
 
+
   // se añade {status === 'failed' && <p style={{ color: 'ef4444' }}>Error: {error}</p>} para mostrar el error 
   return (
     <div className="grid" style={{ gridTemplateColumns: '1.1fr 1.4fr', gap: 24 }}>

@@ -1,4 +1,4 @@
-import { createAsyncThunk, createSlice } from '@reduxjs/toolkit'
+import { createAsyncThunk, createSlice, createSelector } from '@reduxjs/toolkit'
 import api from '../../services/apiClient.js'
 
 export const fetchAuthors = createAsyncThunk('blueprints/fetchAuthors', async () => {
@@ -88,4 +88,19 @@ const slice = createSlice({
   },
 })
 
+
+const selectByAuthorState = (state) => state.blueprints.byAuthor
+
+export const selectTopBlueprints = createSelector(
+  [selectByAuthorState],
+  (byAuthor) => {
+    // 1. Aplanamos todos los arrays de blueprints de cada autor en una sola lista
+    const allBlueprints = Object.values(byAuthor).flat()
+
+    // 2. Los ordenamos por cantidad de puntos de mayor a menor y tomamos los 5 primeros
+    return allBlueprints
+      .sort((a, b) => (b.points?.length || 0) - (a.points?.length || 0))
+      .slice(0, 5)
+  }
+)
 export default slice.reducer
