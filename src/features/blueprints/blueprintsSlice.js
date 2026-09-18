@@ -51,12 +51,36 @@ const slice = createSlice({
         s.status = 'failed'
         s.error = a.error.message
       })
+      .addCase(fetchByAuthor.pending, (s,a) => {
+      s.status = 'loading'
+      s.error = null
+      })
+      .addCase(fetchByAuthor.rejected, (s,a) => {
+        s.status = 'failed'
+        s.error = a.error.message
+      })
       .addCase(fetchByAuthor.fulfilled, (s, a) => {
         s.byAuthor[a.payload.author] = a.payload.items
       })
+      .addCase(fetchBlueprint.pending, (s,a) => {
+        s.status = 'loading'
+        s.error = null
+        })
+        .addCase(fetchBlueprint.rejected, (s,a) => {
+          s.status = 'failed'
+          s.error = a.error.message
+        })
       .addCase(fetchBlueprint.fulfilled, (s, a) => {
         s.current = a.payload
       })
+      .addCase(createBlueprint.pending, (s,a) => {
+        s.status = 'loading'
+        s.error = null
+        })
+        .addCase(createBlueprint.rejected, (s,a) => {
+          s.status = 'failed'
+          s.error = a.error.message
+        })
       .addCase(createBlueprint.fulfilled, (s, a) => {
         const bp = a.payload
         if (s.byAuthor[bp.author]) s.byAuthor[bp.author].push(bp)

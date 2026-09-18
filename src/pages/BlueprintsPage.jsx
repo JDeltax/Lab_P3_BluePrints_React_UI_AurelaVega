@@ -9,7 +9,7 @@ import BlueprintCanvas from '../components/BlueprintCanvas.jsx'
 
 export default function BlueprintsPage() {
   const dispatch = useDispatch()
-  const { byAuthor, current, status } = useSelector((s) => s.blueprints)
+  const { byAuthor, current, status, error } = useSelector((s) => s.blueprints) //Linea cambiada pa mostrar el error 
   const [authorInput, setAuthorInput] = useState('')
   const [selectedAuthor, setSelectedAuthor] = useState('')
   const items = byAuthor[selectedAuthor] || []
@@ -33,6 +33,8 @@ export default function BlueprintsPage() {
     dispatch(fetchBlueprint({ author: bp.author, name: bp.name }))
   }
 
+
+  // se añade {status === 'failed' && <p style={{ color: 'ef4444' }}>Error: {error}</p>} para mostrar el error 
   return (
     <div className="grid" style={{ gridTemplateColumns: '1.1fr 1.4fr', gap: 24 }}>
       <section className="grid" style={{ gap: 16 }}>
@@ -56,6 +58,7 @@ export default function BlueprintsPage() {
             {selectedAuthor ? `${selectedAuthor}'s blueprints:` : 'Results'}
           </h3>
           {status === 'loading' && <p>Cargando...</p>}
+          {status === 'failed' && <p style={{ color: 'ef4444' }}>Error: {error}</p>} 
           {!items.length && status !== 'loading' && <p>Sin resultados.</p>}
           {!!items.length && (
             <div style={{ overflowX: 'auto' }}>
