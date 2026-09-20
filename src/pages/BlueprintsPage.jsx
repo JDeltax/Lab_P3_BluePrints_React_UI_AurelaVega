@@ -4,12 +4,19 @@ import {
   fetchAuthors,
   fetchByAuthor,
   fetchBlueprint,
+  selectRequests,
+  selectTopBlueprints,
 } from '../features/blueprints/blueprintsSlice.js'
 import BlueprintCanvas from '../components/BlueprintCanvas.jsx'
 
 export default function BlueprintsPage() {
   const dispatch = useDispatch()
-  const { byAuthor, current, status, error } = useSelector((s) => s.blueprints) //Linea cambiada pa mostrar el error 
+  const { byAuthor, current } = useSelector((s) => s.blueprints)
+  const requests = useSelector(selectRequests)
+  const topBlueprints = useSelector(selectTopBlueprints)
+  const listRequest = requests.fetchByAuthor // estado de "Get blueprints"
+  const openRequest = requests.fetchBlueprint // estado de "Open"
+
   const [authorInput, setAuthorInput] = useState('')
   const [selectedAuthor, setSelectedAuthor] = useState('')
   const items = byAuthor[selectedAuthor] || []
@@ -33,9 +40,6 @@ export default function BlueprintsPage() {
     dispatch(fetchBlueprint({ author: bp.author, name: bp.name }))
   }
 
-
-
-  // se añade {status === 'failed' && <p style={{ color: 'ef4444' }}>Error: {error}</p>} para mostrar el error 
   return (
     <div className="grid" style={{ gridTemplateColumns: '1.1fr 1.4fr', gap: 24 }}>
       <section className="grid" style={{ gap: 16 }}>
@@ -58,9 +62,13 @@ export default function BlueprintsPage() {
           <h3 style={{ marginTop: 0 }}>
             {selectedAuthor ? `${selectedAuthor}'s blueprints:` : 'Results'}
           </h3>
-          {status === 'loading' && <p>Cargando...</p>}
-          {status === 'failed' && <p style={{ color: 'ef4444' }}>Error: {error}</p>} 
-          {!items.length && status !== 'loading' && <p>Sin resultados.</p>}
+          {listRequest.status === 'loading' && <p>Cargando...</p>}
+          {listRequest.status === 'failed' && (
+            <p style={{ color: '#ef4444' }}>Error: {listRequest.error}</p>
+          )}
+          {listRequest.status === 'succeeded' && !items.length && (
+            <p>Este autor no tiene planos. Prueba con otro nombre.</p>
+          )}
           {!!items.length && (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -115,10 +123,29 @@ export default function BlueprintsPage() {
           )}
           <p style={{ marginTop: 12, fontWeight: 700 }}>Total user points: {totalPoints}</p>
         </div>
+
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Top 5 by number of points</h3>
+          {!topBlueprints.length ? (
+            <p>Consulta un autor para ver su ranking.</p>
+          ) : (
+            <ol style={{ margin: 0, paddingLeft: 20 }}>
+              {topBlueprints.map((bp) => (
+                <li key={`${bp.author}/${bp.name}`}>
+                  {bp.author} / {bp.name} — {bp.points?.length || 0} puntos
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
       </section>
 
       <section className="card">
         <h3 style={{ marginTop: 0 }}>Current blueprint: {current?.name || '—'}</h3>
+        {openRequest.status === 'loading' && <p>Cargando plano...</p>}
+        {openRequest.status === 'failed' && (
+          <p style={{ color: '#ef4444' }}>Error: {openRequest.error}</p>
+        )}
         <BlueprintCanvas points={current?.points || []} />
       </section>
     </div>

@@ -1,11 +1,15 @@
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useSelector } from 'react-redux'
- 
+import { selectIsAuthenticated } from '../features/auth/authSlice.js'
+
 export default function PrivateRoute({ children }) {
-  // Verificamos el estado de autenticación en Redux (ajusta la ruta según tu store, ej: state.auth o state.user)
-  const { isAuthenticated } = useSelector((state) => state.auth || { isAuthenticated: false })
- 
-  // Si está autenticado, muestra el componente hijo (ej. formulario de creación/edición)
-  // Si no, lo redirige al login
-  return isAuthenticated ? children : <Navigate to="/login" replace />
+  const isAuthenticated = useSelector(selectIsAuthenticated)
+  const location = useLocation()
+
+  if (!isAuthenticated) {
+    // Se guarda la ruta pedida en `state.from` para volver a ella después del login.
+    return <Navigate to="/login" replace state={{ from: location }} />
+  }
+
+  return children
 }

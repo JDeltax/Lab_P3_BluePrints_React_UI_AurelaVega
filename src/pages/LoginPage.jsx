@@ -1,21 +1,23 @@
 import { useState } from 'react'
-import api from '../services/apiClient.js'
+import { useDispatch, useSelector } from 'react-redux'
+import { Navigate, useLocation } from 'react-router-dom'
+import { login, selectIsAuthenticated } from '../features/auth/authSlice.js'
 
 export default function LoginPage() {
+  const dispatch = useDispatch()
+  const location = useLocation()
+  const isAuthenticated = useSelector(selectIsAuthenticated)
+  const { status, error } = useSelector((s) => s.auth)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState(null)
 
-  const submit = async (e) => {
+  // Con sesión iniciada, volvemos a la página que se intentó abrir (o al inicio).
+  const from = location.state?.from?.pathname || '/'
+  if (isAuthenticated) return <Navigate to={from} replace />
+
+  const submit = (e) => {
     e.preventDefault()
-    setError(null)
-    try {
-      const { data } = await api.post('/auth/login', { username, password })
-      localStorage.setItem('token', data.token)
-      alert('Login exitoso')
-    } catch (e) {
-      setError('Credenciales inválidas o servidor no disponible')
-    }
+    dispatch(login({ username, password }))
   }
 
   return (
@@ -36,9 +38,9 @@ export default function LoginPage() {
           />
         </div>
       </div>
-      {error && <p style={{ color: '#f87171' }}>{error}</p>}
-      <button className="btn primary" style={{ marginTop: 12 }}>
-        Ingresar
+      {status === 'failed' && <p style={{ color: '#f87171' }}>{error}</p>}
+      <button className="btn primary" style={{ marginTop: 12 }} disabled={status === 'loading'}>
+        {status === 'loading' ? 'Ingresando...' : 'Ingresar'}
       </button>
     </form>
   )
