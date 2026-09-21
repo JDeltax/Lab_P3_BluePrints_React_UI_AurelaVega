@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice, createSelector } from '@reduxjs/toolkit'
-import service from '../../services/blueprintsService.js'
+import service from '../../services/BlueprintsService.js'
 
 // Los thunks no conocen Axios ni las URLs: hablan con el servicio (mock o API real).
 
