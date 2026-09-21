@@ -369,3 +369,8 @@ podría duplicar o borrar datos. Los errores de las operaciones optimistas usan 
 mismo banner sin botón, ya que el estado se revierte automáticamente.
 
 ![alt text](image-4.png)
+
+
+## 6. Testing
+Se modifican las clases existentes de testing, se añaden los parametros de uso del testing-library, además se crea una clase nueva BluePrintList.test.jsx
+![alt text](tests.png)
