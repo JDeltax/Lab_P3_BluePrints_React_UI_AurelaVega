@@ -5,19 +5,19 @@ const enc = encodeURIComponent
 // Implementación real: habla con el backend. Devuelve datos planos (no la respuesta de Axios)
 // para que tenga exactamente el mismo contrato que blueprintsApiMock.
 const blueprintsApiClient = {
-    // GET /api/blueprints → [{ author, name, points }]
+    // GET /api/blueprints -> [{ author, name, points }]
     async getAll() {
         const { data } = await api.get('/blueprints')
         return data
     },
 
-    // GET /api/blueprints/{author} → [{ author, name, points }]
+    // GET /api/blueprints/{author} -> [{ author, name, points }]
     async getByAuthor(author) {
         const { data } = await api.get(`/blueprints/${enc(author)}`)
         return data
     },
 
-    // GET /api/blueprints/{author}/{name} → { author, name, points }
+    // GET /api/blueprints/{author}/{name} -> { author, name, points }
     async getByAuthorAndName(author, name) {
         const { data } = await api.get(`/blueprints/${enc(author)}/${enc(name)}`)
         return data
@@ -38,7 +38,7 @@ const blueprintsApiClient = {
     },
 
     // Delete: DELETE /api/blueprints/{author}/{name}
-    // OJO: el backend actual NO expone este endpoint, así que responderá con error (p. ej. 405).
+    // OJO: el backend actual NO expone este endpoint, así que responderá con error (ej. 405).
     // Es intencional: así se puede ver cómo el optimistic update se revierte.
     async remove(author, name) {
         await api.delete(`/blueprints/${enc(author)}/${enc(name)}`)

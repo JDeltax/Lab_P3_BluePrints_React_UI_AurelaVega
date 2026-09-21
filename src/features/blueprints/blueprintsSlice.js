@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice, createSelector } from '@reduxjs/toolkit'
-import service from '../../services/Blueprintsservice.js'
+import service from '../../services/blueprintsService.js'
 
 // Los thunks no conocen Axios ni las URLs: hablan con el servicio (mock o API real).
 
@@ -49,10 +49,27 @@ const start = (s, key) => {
     s.requests[key] = { status: 'loading', error: null }
 }
 const succeed = (s, key) => {
-    s.requests[key] = { status: 'succeeded', error: null }
+        s.requests[key] = { status: 'succeeded', error: null }
+    }
+    // Errores que tiene sentido reintentar: de red, tiempo agotado o del servidor (5xx).
+    // Los 4xx (404, 403...) se repetirían igual, así que en esos casos no se ofrece "Reintentar".
+    // (Axios pone ERR_BAD_REQUEST a los 4xx y ERR_BAD_RESPONSE a los 5xx.)
+const RETRYABLE_CODES = ['ERR_NETWORK', 'ECONNABORTED', 'ETIMEDOUT', 'ERR_BAD_RESPONSE']
+
+const errorMessage = (error) => {
+    if (error.code === 'ERR_NETWORK') return 'No se pudo conectar con el servidor'
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+        return 'El servidor tardó demasiado en responder'
+    }
+    return error.message
 }
+
 const fail = (s, key, action) => {
-    s.requests[key] = { status: 'failed', error: action.error.message }
+    s.requests[key] = {
+        status: 'failed',
+        error: errorMessage(action.error),
+        retryable: RETRYABLE_CODES.includes(action.error.code),
+    }
 }
 
 const isSameBlueprint = (bp, author, name) => bp?.author === author && bp?.name === name

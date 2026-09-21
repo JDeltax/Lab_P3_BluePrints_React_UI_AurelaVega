@@ -10,6 +10,7 @@ import {
   selectTopBlueprints,
 } from '../features/blueprints/blueprintsSlice.js'
 import BlueprintCanvas from '../components/BlueprintCanvas.jsx'
+import ErrorBanner from '../components/ErrorBanner.jsx'
 
 export default function BlueprintsPage() {
   const dispatch = useDispatch()
@@ -25,6 +26,7 @@ export default function BlueprintsPage() {
   const [selectedAuthor, setSelectedAuthor] = useState('')
   const [pointX, setPointX] = useState('')
   const [pointY, setPointY] = useState('')
+  const [lastOpened, setLastOpened] = useState(null) // para poder reintentar "Open"
   const items = byAuthor[selectedAuthor] || []
 
   const validPoint =
@@ -49,8 +51,15 @@ export default function BlueprintsPage() {
   }
 
   const openBlueprint = (bp) => {
-    dispatch(fetchBlueprint({ author: bp.author, name: bp.name }))
+    const target = { author: bp.author, name: bp.name }
+    setLastOpened(target)
+    dispatch(fetchBlueprint(target))
   }
+
+  // Reintentar = volver a despachar el mismo thunk con los mismos argumentos.
+  // Solo se ofrece en lecturas (GET), que se pueden repetir sin efectos secundarios.
+  const retryList = () => dispatch(fetchByAuthor(selectedAuthor))
+  const retryOpen = () => dispatch(fetchBlueprint(lastOpened))
 
   // Optimistic: el plano desaparece de la tabla al instante; si el servidor falla, vuelve a aparecer.
   const removeBlueprint = (bp) => {
@@ -96,12 +105,15 @@ export default function BlueprintsPage() {
           </h3>
           {listRequest.status === 'loading' && <p>Cargando...</p>}
           {listRequest.status === 'failed' && (
-            <p style={{ color: '#ef4444' }}>Error: {listRequest.error}</p>
+            <ErrorBanner
+              message={`No se pudieron cargar los planos: ${listRequest.error}`}
+              onRetry={listRequest.retryable ? retryList : undefined}
+            />
           )}
           {deleteRequest.status === 'failed' && (
-            <p style={{ color: '#ef4444' }}>
-              No se pudo eliminar el plano (se restauró en la lista): {deleteRequest.error}
-            </p>
+            <ErrorBanner
+              message={`No se pudo eliminar el plano (se restauró en la lista): ${deleteRequest.error}`}
+            />
           )}
           {listRequest.status === 'succeeded' && !items.length && (
             <p>Este autor no tiene planos. Prueba con otro nombre.</p>
@@ -186,7 +198,10 @@ export default function BlueprintsPage() {
         <h3 style={{ marginTop: 0 }}>Current blueprint: {current?.name || '—'}</h3>
         {openRequest.status === 'loading' && <p>Cargando plano...</p>}
         {openRequest.status === 'failed' && (
-          <p style={{ color: '#ef4444' }}>Error: {openRequest.error}</p>
+          <ErrorBanner
+            message={`No se pudo abrir el plano: ${openRequest.error}`}
+            onRetry={openRequest.retryable && lastOpened ? retryOpen : undefined}
+          />
         )}
         <BlueprintCanvas points={current?.points || []} />
 
@@ -212,9 +227,9 @@ export default function BlueprintsPage() {
           </form>
         )}
         {addPointRequest.status === 'failed' && (
-          <p style={{ color: '#ef4444' }}>
-            No se pudo agregar el punto (se quitó del plano): {addPointRequest.error}
-          </p>
+          <ErrorBanner
+            message={`No se pudo agregar el punto (se quitó del plano): ${addPointRequest.error}`}
+          />
         )}
       </section>
     </div>
