@@ -1,18 +1,39 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import {
+  addPoint,
+  deleteBlueprint,
   fetchAuthors,
   fetchByAuthor,
   fetchBlueprint,
+  selectRequests,
+  selectTopBlueprints,
 } from '../features/blueprints/blueprintsSlice.js'
 import BlueprintCanvas from '../components/BlueprintCanvas.jsx'
+import ErrorBanner from '../components/ErrorBanner.jsx'
 
 export default function BlueprintsPage() {
   const dispatch = useDispatch()
-  const { byAuthor, current, status } = useSelector((s) => s.blueprints)
+  const { byAuthor, current } = useSelector((s) => s.blueprints)
+  const requests = useSelector(selectRequests)
+  const topBlueprints = useSelector(selectTopBlueprints)
+  const listRequest = requests.fetchByAuthor // estado de "Get blueprints"
+  const openRequest = requests.fetchBlueprint // estado de "Open"
+  const deleteRequest = requests.deleteBlueprint // estado de "Delete"
+  const addPointRequest = requests.addPoint // estado de "Add point"
+
   const [authorInput, setAuthorInput] = useState('')
   const [selectedAuthor, setSelectedAuthor] = useState('')
+  const [pointX, setPointX] = useState('')
+  const [pointY, setPointY] = useState('')
+  const [lastOpened, setLastOpened] = useState(null) // para poder reintentar "Open"
   const items = byAuthor[selectedAuthor] || []
+
+  const validPoint =
+    pointX !== '' &&
+    pointY !== '' &&
+    Number.isFinite(Number(pointX)) &&
+    Number.isFinite(Number(pointY))
 
   useEffect(() => {
     dispatch(fetchAuthors())
@@ -30,7 +51,34 @@ export default function BlueprintsPage() {
   }
 
   const openBlueprint = (bp) => {
-    dispatch(fetchBlueprint({ author: bp.author, name: bp.name }))
+    const target = { author: bp.author, name: bp.name }
+    setLastOpened(target)
+    dispatch(fetchBlueprint(target))
+  }
+
+  // Reintentar = volver a despachar el mismo thunk con los mismos argumentos.
+  // Solo se ofrece en lecturas (GET), que se pueden repetir sin efectos secundarios.
+  const retryList = () => dispatch(fetchByAuthor(selectedAuthor))
+  const retryOpen = () => dispatch(fetchBlueprint(lastOpened))
+
+  // Optimistic: el plano desaparece de la tabla al instante; si el servidor falla, vuelve a aparecer.
+  const removeBlueprint = (bp) => {
+    dispatch(deleteBlueprint({ author: bp.author, name: bp.name }))
+  }
+
+  // Optimistic: el punto se dibuja al instante; si el servidor falla, se quita.
+  const submitPoint = (e) => {
+    e.preventDefault()
+    if (!current || !validPoint) return
+    dispatch(
+      addPoint({
+        author: current.author,
+        name: current.name,
+        point: { x: Number(pointX), y: Number(pointY) },
+      }),
+    )
+    setPointX('')
+    setPointY('')
   }
 
   return (
@@ -55,8 +103,21 @@ export default function BlueprintsPage() {
           <h3 style={{ marginTop: 0 }}>
             {selectedAuthor ? `${selectedAuthor}'s blueprints:` : 'Results'}
           </h3>
-          {status === 'loading' && <p>Cargando...</p>}
-          {!items.length && status !== 'loading' && <p>Sin resultados.</p>}
+          {listRequest.status === 'loading' && <p>Cargando...</p>}
+          {listRequest.status === 'failed' && (
+            <ErrorBanner
+              message={`No se pudieron cargar los planos: ${listRequest.error}`}
+              onRetry={listRequest.retryable ? retryList : undefined}
+            />
+          )}
+          {deleteRequest.status === 'failed' && (
+            <ErrorBanner
+              message={`No se pudo eliminar el plano (se restauró en la lista): ${deleteRequest.error}`}
+            />
+          )}
+          {listRequest.status === 'succeeded' && !items.length && (
+            <p>Este autor no tiene planos. Prueba con otro nombre.</p>
+          )}
           {!!items.length && (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -99,9 +160,14 @@ export default function BlueprintsPage() {
                         {bp.points?.length || 0}
                       </td>
                       <td style={{ padding: '8px', borderBottom: '1px solid #1f2937' }}>
-                        <button className="btn" onClick={() => openBlueprint(bp)}>
-                          Open
-                        </button>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button className="btn" onClick={() => openBlueprint(bp)}>
+                            Open
+                          </button>
+                          <button className="btn" onClick={() => removeBlueprint(bp)}>
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -111,11 +177,60 @@ export default function BlueprintsPage() {
           )}
           <p style={{ marginTop: 12, fontWeight: 700 }}>Total user points: {totalPoints}</p>
         </div>
+
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>Top 5 by number of points</h3>
+          {!topBlueprints.length ? (
+            <p>Consulta un autor para ver su ranking.</p>
+          ) : (
+            <ol style={{ margin: 0, paddingLeft: 20 }}>
+              {topBlueprints.map((bp) => (
+                <li key={`${bp.author}/${bp.name}`}>
+                  {bp.author} / {bp.name} — {bp.points?.length || 0} puntos
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
       </section>
 
       <section className="card">
         <h3 style={{ marginTop: 0 }}>Current blueprint: {current?.name || '—'}</h3>
+        {openRequest.status === 'loading' && <p>Cargando plano...</p>}
+        {openRequest.status === 'failed' && (
+          <ErrorBanner
+            message={`No se pudo abrir el plano: ${openRequest.error}`}
+            onRetry={openRequest.retryable && lastOpened ? retryOpen : undefined}
+          />
+        )}
         <BlueprintCanvas points={current?.points || []} />
+
+        {current && (
+          <form onSubmit={submitPoint} style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+            <input
+              className="input"
+              type="number"
+              placeholder="x"
+              value={pointX}
+              onChange={(e) => setPointX(e.target.value)}
+            />
+            <input
+              className="input"
+              type="number"
+              placeholder="y"
+              value={pointY}
+              onChange={(e) => setPointY(e.target.value)}
+            />
+            <button className="btn primary" disabled={!validPoint}>
+              Add point
+            </button>
+          </form>
+        )}
+        {addPointRequest.status === 'failed' && (
+          <ErrorBanner
+            message={`No se pudo agregar el punto (se quitó del plano): ${addPointRequest.error}`}
+          />
+        )}
       </section>
     </div>
   )

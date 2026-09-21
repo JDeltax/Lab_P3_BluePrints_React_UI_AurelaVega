@@ -184,3 +184,193 @@ VITE_USE_MOCK=true
 - **Dark mode** y diseño responsive.
 
 > Este proyecto es un punto de partida para que tus estudiantes evolucionen el cliente clásico de Blueprints a una SPA moderna con prácticas de la industria.
+
+
+# Desarrollo del laboratorio 
+
+Esta sección documenta las actividades sugeridas . El backend usado es el del
+laboratorio anterior **que no fue modificado para este lab**.
+
+## Configuración previa
+
+El backend corre en `http://localhost:8080` y el frontend en `http://localhost:5173`.
+Al ser orígenes distintos, el navegador bloqueaba las peticiones por CORS. Para no
+modificar el backend se configuró un **proxy en el servidor de desarrollo de Vite**:
+
+```js
+// vite.config.js
+server: {
+  proxy: {
+    '/api': 'http://localhost:8080',
+    '/auth': 'http://localhost:8080',
+  },
+}
+```
+
+Así el frontend pide a su propio origen y Vite reenvía la petición al backend.
+
+Variables de entorno (En la estructura vamos a ver tanto `.env.example` como `.env`, esto debido a que prefirimos dejar el que ya estaba y agregar el que necesitabamos, es decir `.env`):
+
+```env
+VITE_API_BASE_URL=/api
+VITE_AUTH_BASE_URL=/auth
+VITE_USE_MOCK=false
+```
+
+![alt text](image.png)
+>Podemos ver que obtenemos un funcionamiento correcto.
+
+## Requerimiento previo: servicios `apimock` y `apiclient`
+
+Antes de los puntos 1–5 se completó el requerimiento 4 del laboratorio, necesario
+para el resto del desarrollo. Se crearon tres módulos en `src/services/`:
+
+| Archivo | Responsabilidad |
+|---|---|
+| `blueprintsApiClient.js` | Consume el API REST real con Axios |
+| `blueprintsApiMock.js` | Devuelve datos de prueba desde memoria |
+| `blueprintsService.js` | Selecciona uno u otro según `VITE_USE_MOCK` |
+
+Ambas implementaciones exponen la **misma interfaz** (`getAll`, `getByAuthor`,
+`getByAuthorAndName`, `create` y, desde el punto 3, `addPoint` y `remove`) y devuelven
+datos planos, no respuestas de Axios. El cambio entre uno y otro se hace en una sola línea:
+
+```js
+const blueprintsService =
+  import.meta.env.VITE_USE_MOCK === 'true' ? blueprintsApiMock : blueprintsApiClient
+```
+
+Los *thunks* del slice llaman al servicio y no conocen Axios ni las URLs, por lo que
+cambiar de fuente de datos no requiere modificar Redux ni los componentes.
+
+## 1. Redux avanzado
+
+**Estados `loading`/`error` por thunk.** En lugar de un `status` global se usa un
+objeto `requests`, con una entrada por operación:
+
+```js
+requests: {
+  fetchAuthors:    { status: 'idle', error: null },
+  fetchByAuthor:   { status: 'idle', error: null },
+  fetchBlueprint:  { status: 'idle', error: null },
+  createBlueprint: { status: 'idle', error: null },
+}
+```
+
+Cada thunk actualiza solo su entrada en `pending` (`loading`), `fulfilled`
+(`succeeded`) y `rejected` (`failed` con el mensaje). Esto evita que dos peticiones
+simultáneas se pisen el estado: cargar la lista de un autor y abrir un plano muestran
+su indicador de carga y su error de forma independiente.
+
+**Selector memoizado del top-5.** `selectTopBlueprints` usa `createSelector` para
+derivar los cinco planos con más puntos:
+
+```js
+export const selectTopBlueprints = createSelector([selectByAuthorState], (byAuthor) =>
+  Object.values(byAuthor)
+    .flat()
+    .sort((a, b) => (b.points?.length || 0) - (a.points?.length || 0))
+    .slice(0, 5),
+)
+```
+
+`.flat()` crea un arreglo nuevo, de modo que `.sort()` no muta el estado de Redux. El
+resultado se muestra en una tarjeta de la página principal y se recalcula solo cuando
+cambia `byAuthor`.
+
+![alt text](image-1.png)
+
+## 2. Rutas protegidas
+
+Se implementó la autenticación completa con JWT:
+
+- **`features/auth/authSlice.js`**: guarda el token en Redux, con el thunk `login`
+  (POST `/auth/login`, lee `access_token`) y la acción `logout`.
+- **`components/PrivateRoute.jsx`**: si no hay token redirige a `/login` y guarda la
+  ruta solicitada en `state.from`, para volver a ella después de iniciar sesión.
+- **`services/apiClient.js`**: un interceptor de petición agrega
+  `Authorization: Bearer <token>`; un interceptor de respuesta despacha `logout()`
+  ante un **401**. No ante un 403, que significa sesión válida sin permiso suficiente.
+- **`store/index.js`**: entrega al `apiClient` las funciones `getToken` y
+  `onUnauthorized` mediante `configureApiClient`, evitando un *import* circular entre
+  el store y el cliente HTTP. También sincroniza el token con `localStorage` para que
+  la sesión sobreviva a una recarga.
+
+Como el backend exige el scope `blueprints.read` en todas las rutas `/api/**`, se
+protegieron la página principal, el detalle y la creación de planos.
+
+![alt text](image-2.png)
+![alt text](image-3.png)
+
+## 3. CRUD completo con *optimistic updates*
+
+**Operaciones nuevas.** A los servicios se agregaron `addPoint` (PUT
+`/api/blueprints/{author}/{name}/points`) y `remove` (DELETE), y al slice los thunks
+`addPoint` y `deleteBlueprint`. En la interfaz se añadieron un botón **Delete** por
+fila y un formulario para agregar un punto al plano abierto.
+
+**Actualización optimista.** El cambio se aplica en el estado antes de la respuesta
+del servidor y se revierte si la petición falla:
+
+| Momento | Acción |
+|---|---|
+| `pending` | Aplica el cambio y guarda una copia en `backups[requestId]` |
+| `fulfilled` | Descarta la copia |
+| `rejected` | Restaura desde la copia y registra el error |
+
+Se usa `action.meta.arg` para conocer los argumentos del thunk durante `pending` y
+`action.meta.requestId` como llave única, de modo que dos operaciones simultáneas no
+mezclen sus copias. Al borrar, el plano se reinserta en su posición original
+(`splice(index, 0, item)`); al agregar un punto, se elimina ese punto del plano.
+
+**Limitación conocida.** El backend del laboratorio anterior **no expone `DELETE`**,
+por lo que esa operación falla contra el API real y el estado se revierte. Esto
+permite evidenciar el *rollback*; el flujo exitoso se demuestra con
+`VITE_USE_MOCK=true`. El `PUT` disponible agrega un punto a un plano existente, por lo
+que esa es la operación de actualización implementada.
+
+![alt text](image-6.png)
+
+## 4. Dibujo interactivo
+
+**`BlueprintCanvas`** recibe ahora una propiedad opcional `onAddPoint`. Sin ella el
+componente solo dibuja, como antes; con ella captura los clics y convierte la posición
+del cursor a coordenadas del lienzo:
+
+```js
+const rect = canvas.getBoundingClientRect()
+const scaleX = canvas.width / rect.width
+x = Math.round((e.clientX - rect.left) * scaleX)
+```
+
+El escalado es necesario porque el CSS (`width: 100%`) puede mostrar el lienzo a un
+tamaño distinto de sus 520×360 reales; sin él los puntos quedarían desplazados.
+
+**`NewBlueprintPage`** (ruta protegida `/blueprints/new`) permite construir un plano
+haciendo clic, con los botones **Guardar**, **Deshacer** y **Limpiar**. Los puntos del
+borrador se mantienen en estado local (`useState`) porque son temporales de esa
+pantalla; solo al guardar se despacha `createBlueprint` y el resultado pasa a Redux.
+Guardar requiere autor, nombre y al menos dos puntos, y usa `.unwrap()` para
+distinguir el éxito del error.
+
+![alt text](image-5.png)
+> Importante mencionar que para crear puntos debes estar logeado con la cuenta que tenga el scope necesario, en este caso es asssitant.
+## 5. Errores y *Retry*
+
+Se creó el componente reutilizable **`ErrorBanner`** (`role="alert"`), que muestra el
+mensaje y, opcionalmente, un botón **Reintentar**. Reintentar consiste en volver a
+despachar el mismo thunk con los mismos argumentos.
+
+No todos los errores se reintentan. El slice marca cada fallo con `retryable` según el
+código de Axios: errores de red, tiempo agotado y respuestas 5xx sí lo son; un 404 o un
+403 fallaría igual, por lo que en esos casos el banner se muestra sin botón. Además,
+el botón solo se ofrece en operaciones de lectura (GET): repetir un POST o un DELETE
+podría duplicar o borrar datos. Los errores de las operaciones optimistas usan el
+mismo banner sin botón, ya que el estado se revierte automáticamente.
+
+![alt text](image-4.png)
+
+
+## 6. Testing
+Se modifican las clases existentes de testing, se añaden los parametros de uso del testing-library, además se crea una clase nueva BluePrintList.test.jsx
+![alt text](tests.png)

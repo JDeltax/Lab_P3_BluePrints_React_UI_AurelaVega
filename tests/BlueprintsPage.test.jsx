@@ -4,11 +4,26 @@ import { Provider } from 'react-redux'
 import { configureStore, createSlice } from '@reduxjs/toolkit'
 import BlueprintsPage from '../src/pages/BlueprintsPage.jsx'
 
-// Mock de thunks del slice para no requerir backend
+const idleRequests = () => ({
+  fetchAuthors: { status: 'idle', error: null },
+  fetchByAuthor: { status: 'idle', error: null },
+  fetchBlueprint: { status: 'idle', error: null },
+  createBlueprint: { status: 'idle', error: null },
+  addPoint: { status: 'idle', error: null },
+  deleteBlueprint: { status: 'idle', error: null },
+})
+
+const EMPTY_TOP_BLUEPRINTS = []
+
+// Mock de thunks y selectores del slice para no requerir backend
 vi.mock('../src/features/blueprints/blueprintsSlice.js', () => ({
   fetchAuthors: () => ({ type: 'blueprints/fetchAuthors' }),
   fetchByAuthor: (author) => ({ type: 'blueprints/fetchByAuthor', payload: author }),
   fetchBlueprint: (payload) => ({ type: 'blueprints/fetchBlueprint', payload }),
+  addPoint: (payload) => ({ type: 'blueprints/addPoint', payload }),
+  deleteBlueprint: (payload) => ({ type: 'blueprints/deleteBlueprint', payload }),
+  selectRequests: (state) => state.blueprints.requests,
+  selectTopBlueprints: () => EMPTY_TOP_BLUEPRINTS,
 }))
 
 function makeStore(preloaded) {
@@ -18,8 +33,8 @@ function makeStore(preloaded) {
       authors: [],
       byAuthor: {},
       current: null,
-      status: 'idle',
-      error: null,
+      backups: {},
+      requests: idleRequests(),
       ...preloaded,
     },
     reducers: {},

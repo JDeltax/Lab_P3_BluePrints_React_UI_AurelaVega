@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 
-export default function BlueprintCanvas({ points = [], width = 520, height = 360 }) {
+// Sin `onAddPoint` solo muestra el plano. Con `onAddPoint` también captura clics y
+// entrega las coordenadas del punto en el sistema de coordenadas del canvas.
+export default function BlueprintCanvas({ points = [], width = 520, height = 360, onAddPoint }) {
   const ref = useRef(null)
 
   useEffect(() => {
@@ -43,17 +45,33 @@ export default function BlueprintCanvas({ points = [], width = 520, height = 360
     }
   }, [points])
 
+  const handleClick = (e) => {
+    if (!onAddPoint) return
+    const canvas = ref.current
+    const rect = canvas.getBoundingClientRect()
+    // El clic llega en píxeles de pantalla, pero el CSS (width: 100%) puede mostrar el canvas más
+    // pequeño que su tamaño real (520×360). Se resta el origen del canvas y se escala la diferencia.
+    const scaleX = rect.width ? canvas.width / rect.width : 1
+    const scaleY = rect.height ? canvas.height / rect.height : 1
+    onAddPoint({
+      x: Math.round((e.clientX - rect.left) * scaleX),
+      y: Math.round((e.clientY - rect.top) * scaleY),
+    })
+  }
+
   return (
     <canvas
       ref={ref}
       width={width}
       height={height}
+      onClick={handleClick}
       style={{
         background: '#0b1220',
         border: '1px solid #334155',
         borderRadius: 12,
         width: '100%',
         maxWidth: width,
+        cursor: onAddPoint ? 'crosshair' : 'default',
       }}
     />
   )
